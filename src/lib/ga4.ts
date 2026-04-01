@@ -4,27 +4,21 @@ import path from "path";
 const propertyId = process.env.GA4_PROPERTY_ID!;
 
 function getClient() {
-  // Vercel: read credentials from JSON env var
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     return new BetaAnalyticsDataClient({ credentials });
   }
-
-  // Local: read from key file
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (!keyPath) throw new Error("No GA4 credentials configured");
   const resolvedPath = keyPath.startsWith("./")
     ? path.join(process.cwd(), keyPath)
     : keyPath;
-
-  return new BetaAnalyticsDataClient({
-    keyFilename: resolvedPath,
-  });
+  return new BetaAnalyticsDataClient({ keyFilename: resolvedPath });
 }
 
 export async function getOverview(startDate: string, endDate: string) {
   const client = getClient();
-  const [response] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [
       { startDate, endDate },
@@ -37,37 +31,24 @@ export async function getOverview(startDate: string, endDate: string) {
       { name: "bounceRate" },
     ],
   });
-
+  const response = res[0];
   const current = response.rows?.[0]?.metricValues;
   const previous = response.rows?.[1]?.metricValues;
-
   return {
-    users: {
-      value: parseInt(current?.[0]?.value || "0"),
-      prev: parseInt(previous?.[0]?.value || "0"),
-    },
-    sessions: {
-      value: parseInt(current?.[1]?.value || "0"),
-      prev: parseInt(previous?.[1]?.value || "0"),
-    },
-    pageViews: {
-      value: parseInt(current?.[2]?.value || "0"),
-      prev: parseInt(previous?.[2]?.value || "0"),
-    },
-    bounceRate: {
-      value: parseFloat(current?.[3]?.value || "0"),
-      prev: parseFloat(previous?.[3]?.value || "0"),
-    },
+    users:      { value: parseInt(current?.[0]?.value || "0"),  prev: parseInt(previous?.[0]?.value || "0") },
+    sessions:   { value: parseInt(current?.[1]?.value || "0"),  prev: parseInt(previous?.[1]?.value || "0") },
+    pageViews:  { value: parseInt(current?.[2]?.value || "0"),  prev: parseInt(previous?.[2]?.value || "0") },
+    bounceRate: { value: parseFloat(current?.[3]?.value || "0"), prev: parseFloat(previous?.[3]?.value || "0") },
   };
 }
 
 export async function getRealtime() {
   const client = getClient();
-  const [response] = await client.runRealtimeReport({
+  const res = await client.runRealtimeReport({
     property: `properties/${propertyId}`,
     metrics: [{ name: "activeUsers" }],
   });
-
+  const response = res[0];
   return {
     activeUsers: parseInt(response.rows?.[0]?.metricValues?.[0]?.value || "0"),
   };
@@ -75,14 +56,14 @@ export async function getRealtime() {
 
 export async function getTrend(startDate: string, endDate: string) {
   const client = getClient();
-  const [response] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "date" }],
     metrics: [{ name: "sessions" }, { name: "totalUsers" }],
     orderBys: [{ dimension: { dimensionName: "date" } }],
   });
-
+  const response = res[0];
   return (response.rows || []).map((row) => ({
     date: formatDate(row.dimensionValues?.[0]?.value || ""),
     sessions: parseInt(row.metricValues?.[0]?.value || "0"),
@@ -92,7 +73,7 @@ export async function getTrend(startDate: string, endDate: string) {
 
 export async function getSources(startDate: string, endDate: string) {
   const client = getClient();
-  const [response] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "sessionDefaultChannelGroup" }],
@@ -100,7 +81,7 @@ export async function getSources(startDate: string, endDate: string) {
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
     limit: BigInt(10),
   });
-
+  const response = res[0];
   return (response.rows || []).map((row) => ({
     source: row.dimensionValues?.[0]?.value || "Other",
     sessions: parseInt(row.metricValues?.[0]?.value || "0"),
@@ -109,7 +90,7 @@ export async function getSources(startDate: string, endDate: string) {
 
 export async function getTopPages(startDate: string, endDate: string) {
   const client = getClient();
-  const [response] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "pageTitle" }, { name: "pagePath" }],
@@ -121,7 +102,7 @@ export async function getTopPages(startDate: string, endDate: string) {
     orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
     limit: BigInt(10),
   });
-
+  const response = res[0];
   return (response.rows || []).map((row) => ({
     title: row.dimensionValues?.[0]?.value || "",
     path: row.dimensionValues?.[1]?.value || "/",
@@ -133,14 +114,14 @@ export async function getTopPages(startDate: string, endDate: string) {
 
 export async function getDevices(startDate: string, endDate: string) {
   const client = getClient();
-  const [response] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "deviceCategory" }],
     metrics: [{ name: "sessions" }],
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
   });
-
+  const response = res[0];
   return (response.rows || []).map((row) => ({
     device: row.dimensionValues?.[0]?.value || "other",
     sessions: parseInt(row.metricValues?.[0]?.value || "0"),
@@ -149,18 +130,15 @@ export async function getDevices(startDate: string, endDate: string) {
 
 export async function getFunnel(startDate: string, endDate: string) {
   const client = getClient();
-
-  // Funnel steps: each step is an event name
   const steps = [
-    { key: "session_start",  label: "進入網站" },
-    { key: "view_item",      label: "查看商品" },
-    { key: "add_to_cart",   label: "加入購物車" },
-    { key: "begin_checkout", label: "開始結帳" },
-    { key: "purchase",      label: "完成購買" },
+    { key: "session_start",   label: "進入網站" },
+    { key: "view_item",       label: "查看商品" },
+    { key: "add_to_cart",     label: "加入購物車" },
+    { key: "begin_checkout",  label: "開始結帳" },
+    { key: "purchase",        label: "完成購買" },
   ];
 
-  // Fetch event counts + avg engagement time per event in one request
-  const [eventsRes] = await client.runReport({
+  const res = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "eventName" }],
@@ -173,14 +151,12 @@ export async function getFunnel(startDate: string, endDate: string) {
     dimensionFilter: {
       filter: {
         fieldName: "eventName",
-        inListFilter: {
-          values: steps.map((s) => s.key),
-        },
+        inListFilter: { values: steps.map((s) => s.key) },
       },
     },
   });
+  const eventsRes = res[0];
 
-  // Build lookup map
   const map: Record<string, { eventCount: number; duration: number; bounceRate: number; sessions: number }> = {};
   for (const row of eventsRes.rows || []) {
     const name = row.dimensionValues?.[0]?.value || "";
@@ -192,28 +168,24 @@ export async function getFunnel(startDate: string, endDate: string) {
     };
   }
 
-  // Build funnel array
   const funnelSteps = steps.map((step) => ({
     key: step.key,
     label: step.label,
     count: map[step.key]?.eventCount ?? 0,
     sessions: map[step.key]?.sessions ?? 0,
     avgDurationSec:
-      map[step.key]?.sessions > 0
+      (map[step.key]?.sessions ?? 0) > 0
         ? Math.round(map[step.key].duration / map[step.key].sessions)
         : 0,
     bounceRate: map[step.key]?.bounceRate ?? 0,
   }));
 
-  // Add drop-off rate (% dropped vs previous step)
-  const result = funnelSteps.map((step, i) => {
+  return funnelSteps.map((step, i) => {
     const prev = i > 0 ? funnelSteps[i - 1].count : step.count;
     const dropOffRate = prev > 0 ? ((prev - step.count) / prev) * 100 : 0;
     const conversionRate = i > 0 && prev > 0 ? (step.count / prev) * 100 : 100;
     return { ...step, dropOffRate, conversionRate };
   });
-
-  return result;
 }
 
 // Helpers
