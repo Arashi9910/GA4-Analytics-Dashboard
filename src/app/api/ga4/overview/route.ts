@@ -1,11 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getOverview } from "@/lib/ga4";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const startDate = searchParams.get("startDate") || "7daysAgo";
-  const endDate = searchParams.get("endDate") || "today";
-
+  const startDate = req.nextUrl.searchParams.get("startDate") || "7daysAgo";
+  const endDate = req.nextUrl.searchParams.get("endDate") || "today";
   try {
     const data = await getOverview(startDate, endDate);
     return NextResponse.json(data);
