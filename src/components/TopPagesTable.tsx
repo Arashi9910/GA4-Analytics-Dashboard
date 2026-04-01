@@ -29,9 +29,11 @@ export default function TopPagesTable({ data, loading }: Props) {
     else { setSortKey(key); setSortDesc(true); }
   };
 
-  const sorted = [...data].sort((a, b) =>
-    sortDesc ? b[sortKey] - a[sortKey] : a[sortKey] - b[sortKey]
-  );
+  const sorted = [...data].sort((a, b) => {
+    const av = a[sortKey] as number;
+    const bv = b[sortKey] as number;
+    return sortDesc ? bv - av : av - bv;
+  });
 
   const SortIcon = ({ k }: { k: SortKey }) => (
     <span className="ml-1 text-gray-600">
