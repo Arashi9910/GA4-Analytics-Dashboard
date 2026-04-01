@@ -79,7 +79,7 @@ export async function getSources(startDate: string, endDate: string) {
     dimensions: [{ name: "sessionDefaultChannelGroup" }],
     metrics: [{ name: "sessions" }],
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
-    limit: BigInt(10),
+    limit: 10,
   });
   const response = res[0];
   return (response.rows || []).map((row) => ({
@@ -100,7 +100,7 @@ export async function getTopPages(startDate: string, endDate: string) {
       { name: "bounceRate" },
     ],
     orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-    limit: BigInt(10),
+    limit: 10,
   });
   const response = res[0];
   return (response.rows || []).map((row) => ({
